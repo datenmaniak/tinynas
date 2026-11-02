@@ -1,0 +1,100 @@
+# ============================================================
+# exclude-etc.txt
+# Filtros para rsync al respaldar /etc con sudo.
+# Objetivo: migración y restauración limpia.
+# ============================================================
+
+# ------------------------------------------------------------
+# 1. Runtime (se regenera en cada arranque)
+# ------------------------------------------------------------
+mtab
+adjtime
+ld.so.cache
+random-seed
+.pwd.lock
+resolv.conf
+resolv.conf.bak
+nologin
+
+# ------------------------------------------------------------
+# 2. Backups viejos de paquetes y editores
+# ------------------------------------------------------------
+*.dpkg-old
+*.dpkg-new
+*.dpkg-dist
+*.ucf-old
+*.ucf-new
+*.ucf-dist
+*.rpmnew
+*.rpmsave
+*.rpmorig
+*.bak
+*.backup
+*.orig
+*.rej
+*~
+*.swp
+*.swo
+
+# ------------------------------------------------------------
+# 3. Logs, cachés y basura
+# ------------------------------------------------------------
+*.log
+*.log.*
+*.gz
+*.xz
+*.bz2
+.cache/
+tmp/
+*.lock
+*.pid
+
+# ------------------------------------------------------------
+# 4. Específicos de la máquina (no restaurar en otra)
+# ------------------------------------------------------------
+machine-id
+hostid
+
+# ------------------------------------------------------------
+# 5. Secretos (no respaldar según decisión)
+# ------------------------------------------------------------
+shadow
+shadow-
+gshadow
+gshadow-
+ssh/ssh_host_*_key
+ssh/ssh_host_*_key.pub.old
+wireguard/*.conf
+openvpn/*.key
+openvpn/*.crt
+letsencrypt/archive/
+letsencrypt/live/
+letsencrypt/keys/
+letsencrypt/csr/
+ssl/private/
+krb5.keytab
+#*.pem
+#*.key
+#*.p12
+#*.pfx
+
+# ------------------------------------------------------------
+# 6. Peso muerto (regenerable o irrelevante)
+# ------------------------------------------------------------
+fonts/
+texmf/
+texlive/
+ImageMagick-6/
+ImageMagick-7/
+groff/
+ghostscript/
+ca-certificates/
+ca-certificates.conf
+ssl/certs/
+apt/auth.conf.d/
+
+# ------------------------------------------------------------
+# 7. Directorios de estado de servicios (no config)
+# ------------------------------------------------------------
+NetworkManager/system-connections/*.bak
+docker/key.json

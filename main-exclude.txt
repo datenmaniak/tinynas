@@ -1,0 +1,113 @@
+# Exclusiones comunes para el respaldo hacia /mnt/tinynas
+# Un patrón por línea. Sintaxis de rsync (--exclude-from).
+
+# --- Imágenes de disco ---
+*.img
+*.iso
+*.vmdk
+*.qcow2
+*.vdi
+*.vhd
+
+# --- Archivos temporales y parciales ---
+*.tmp
+*.temp
+*~
+*.part
+*.crdownload
+*.swp
+*.swo
+
+# Dependencias masivas de desarrollo (si aplica)
+node_modules/
+**/node_modules/
+venv/
+.venv/
+target/
+**/vendor/
+storage/logs/
+**/storage/logs/*
+storage/framework/cache/
+**/storage/framework/cache/*
+storage/framework/sessions/
+**/storage/framework/sessions/*
+storage/framework/views/
+**/storage/framework/views/*
+.git/
+**/.git/
+build/
+**/build/
+**/node/
+
+# Dependencias y caché de PHP Composer
+vendor/
+**/vendor/
+.composer/cache/
+**/ .composer/cache/
+
+# Ubuntu Snap 
+**/snap/
+**/fast-apt-mirror/
+
+# --- Papeleras y reciclajes ---
+.Trash-*
+.Trash/
+recycle/
+$RECYCLE.BIN/
+System Volume Information/
+.local/share/Trash/
+**/local/state/
+**/.trash/
+
+# --- Basura de filesystems ---
+lost+found/
+
+# --- Metadatos de NAS / Synology-like ---
+@eaDir/
+
+# --- Cachés de usuario ---
+.cache/
+Cache/
+.cargo/registry/
+.gradle/caches/
+.npm/_cacache/
+.thumbnails/
+.local/share/
+.config/Vivaldi/
+.config/Code/
+.config/GIMP/
+.config/balenaEtcher/
+.config/libreoffice/
+.config/mozilla/
+.config/opencode/
+
+# Flatpak
+.var/app/
+var/lib/flatpak/
+.local/share/flatpak/
+
+# --- instalación de Rust gestionada por rustup
+.rustup/
+.cargo/
+
+
+# --- Específicos de /etc ---
+mtab
+resolv.conf
+etc/
+
+# -- especifico de IA
+.opencode/
+
+# Directorios temporales de contenedores (buildah, podman, distrobox, toolbx)
+**/tmp/buildah*
+**/buildah*/
+**/.local/share/containers/
+**/.local/share/distrobox/
+**/.local/share/toolbx/
+
+# Obsidian
+**/.obsidian/
+
+# -- VSCode
+**/.vscode-oss/

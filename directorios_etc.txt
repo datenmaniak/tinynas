@@ -1,0 +1,145 @@
+# ============================================================
+# directorios_etc.txt
+# Rutas relativas a /etc a respaldar SIN sudo.
+# Comentarios con '#' (inicio o final de línea) son ignorados.
+# ============================================================
+
+# --- Identidad del sistema ---
+hostname
+hosts
+timezone
+localtime
+adjtime
+machine-id
+os-release
+lsb-release
+
+# --- Montaje y arranque ---
+fstab
+crypttab
+default/grub
+default/grub.d
+default/keyboard
+default/console-setup
+default/locale
+default/timezone
+systemd/system
+systemd/network
+systemd/resolved.conf
+systemd/timesyncd.conf
+systemd/journald.conf
+systemd/logind.conf
+systemd/sleep.conf
+systemd/coredump.conf
+systemd/oomd.conf
+systemd/user
+
+# --- Red ---
+network/interfaces
+network/interfaces.d
+netplan
+NetworkManager/system-connections
+NetworkManager/conf.d
+resolv.conf
+hosts.allow
+hosts.deny
+nftables.conf
+iptables/rules.v4
+iptables/rules.v6
+ufw
+dhcp/dhclient.conf
+dhcpcd.conf
+
+# --- Acceso y seguridad (sin secretos) ---
+pam.d
+security
+security/limits.conf
+security/limits.d
+security/pam_env.conf
+security/namespace.conf
+sudoers.d         
+passwd
+group
+crontab
+cron.d
+cron.daily
+cron.hourly
+cron.weekly
+cron.monthly
+anacrontab
+
+# --- SSH (solo configuración, no host keys) ---
+ssh/ssh_config
+ssh/ssh_config.d
+ssh/sshd_config
+ssh/sshd_config.d
+ssh/moduli
+
+# --- Servicios web ---
+nginx
+apache2
+caddy
+haproxy
+containers
+fail2ban
+dnsmasq.d
+samba
+exports
+nfs-kernel-server
+autofs
+
+# --- Contenedores ---
+docker
+containers
+containers/registries.conf
+containers/policy.json
+
+# --- Servicios de red / VPN (sin secretos) ---
+fail2ban
+unbound
+dnsmasq
+dnsmasq.d
+dhcp
+samba
+nfs-kernel-server
+exports
+smb.conf
+
+# --- Paquetes ---
+apt/sources.list
+apt/sources.list.d
+apt/preferences
+apt/preferences.d
+apt/apt.conf.d
+apt/trusted.gpg.d
+dpkg/dpkg.cfg
+dpkg/dpkg.cfg.d
+pacman.conf
+pacman.d
+systemd/system
+systemd/user
+dnf
+yum.repos.d
+
+
+# --- Otros ---
+locale.gen
+locales.conf
+environment
+profile.d
+vim
+nano
+inputrc
+bash.bashrc
+zsh
+
+# --- Logs y sistema ---
+logrotate.conf
+logrotate.d
+rsyslog.conf
+rsyslog.d
+udev/rules.d
+modprobe.d
+modules-load.d
+sysctl.conf
+sysctl.d

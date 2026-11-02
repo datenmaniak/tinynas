@@ -1,0 +1,29 @@
+#!/usr/bin/bash 
+
+
+# cat <<EOF > lista.txt 
+# cat home-dirs.txt
+#
+# echo "#- ~/.config"
+# cat config-dirs.txt 
+#
+# echo "# ~/.local"
+# cat local-dirs.txt
+#
+# echo "# ~/.local/share"
+# cat local-share.txt 
+# EOF
+
+
+{
+  echo "# ---  ${HOME}  ---"
+  cat home-dirs.txt
+  echo "# --- dotfiles ---"
+  cat dotfiles.txt
+  echo "# --- ~/.config ---" 
+  cat config-dirs.txt
+  echo "# ---  ~/.local  ---"
+  cat local-dirs.txt
+  echo "# ---  ~/.local/share ---"
+  cat local-share.txt
+} > lista.txt

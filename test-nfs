@@ -1,0 +1,6 @@
+# Añade -n e -i a tu comando actual para ver qué pasaría
+rsync -aHAX --numeric-ids --exclude-from="${EXCLUDE_FILE}" \
+--info=progress2 --filter='-x security.selinux' --filter='-x system.nfs4_acl' \
+-z  -i ~/.zshrc ~/.zsh_aliases \
+--ignore-times \
+/var/mnt/tinynas/ryzen/automated-backup/
