@@ -26,7 +26,7 @@ HOME_USER="/home/${USER}"
 #SCRIPT_DIR="/home/${USER}/admin/tinynas"
 SCRIPT_DIR="$SCRIPTS/tinynas"
 MAIN_EXCLUDE="${SCRIPT_DIR}/main-exclude.txt"
-DIRECTORIOS_FILE="${SCRIPT_DIR}/home-dirs.txt"
+INCLUDESFILE="${SCRIPT_DIR}/home-dirs.txt"
 LOCK_FILE="${SCRIPT_DIR}/backup-tinynas-dinamico.lock"
 
 # se agrega lista de exclusiones adicionales  para afinar el filtrado. 
@@ -94,6 +94,8 @@ RSYNC_OPTS=(
   --filter='-x system.nfs4_acl'
   --ignore-times
   -z
+  --exclude-from="${EXCLUDE_DOTCONFIG}"
+  --exclude-from="${EXCLUDE_DOTLOCAL}"
 )
 
 #  --  changes log 
@@ -149,8 +151,8 @@ if [[ ! -r "${MAIN_EXCLUDE}" ]]; then
   exit 1
 fi
 
-if [[ ! -r "${DIRECTORIOS_FILE}" ]]; then
-  log_error "No se puede leer ${DIRECTORIOS_FILE}. Abortando."
+if [[ ! -r "${INCLUDESFILE}" ]]; then
+  log_error "No se puede leer ${INCLUDESFILE}. Abortando."
   exit 1
 fi
 
@@ -201,7 +203,7 @@ if [[ -d "${DESTINO_HOME}" ]]; then
 
     limpia=$(echo "${linea}" | xargs)
     [[ -n "${limpia}" ]] && CARPETAS_VALIDAS["${limpia}"]=1
-  done < "${DIRECTORIOS_FILE}"
+  done < "${INCLUDESFILE}"
 
   # 2. Recorrer el directorio de destino de forma segura usando nullglob / dotglob
   # (dotglob permite incluir archivos/carpetas ocultos que comiencen con punto)
@@ -218,49 +220,95 @@ if [[ -d "${DESTINO_HOME}" ]]; then
     # Omitir directorios especiales de ruta
     [[ "${nombre_dir}" == "." || "${nombre_dir}" == ".." ]] && continue
 
-    # 3. Si el directorio en el destino NO existe en el archivo de configuración:
     # if [[ -z "${CARPETAS_VALIDAS[$nombre_dir]:-}" ]]; then
-    #   log_warn "La carpeta '${nombre_dir}' ya no está en la lista (${DIRECTORIOS_FILE})."
+    # log_warn "La carpeta '${nombre_dir}' ya no está en la lista (${INCLUDESFILE})."
     #
-    #   # Si deseas que borre físicamente el directorio obsoleto en el NAS, descomenta la siguiente línea:
-    #   if [ "$DRY_RUN" = "0" ]; then  
-    #    rm -rf "${destino_item}" >> "${LOG_FILE}" 2>&1
-    #   fi 
+    # if [ "$DRY_RUN" = "0" ]; then
+    #     # Contar elementos para saber cuánto trabajo hay
+    #     total_items=$(find "${destino_item}" -mindepth 1 2>/dev/null | wc -l)
+    #     log_info "Eliminando '${nombre_dir}' (${total_items} elementos)..."
     #
-    #   log_info "Carpeta '${nombre_dir}' sera eliminada del NAS"
+    #     # Spinner mientras corre rm -rf en background
+    #     rm -rf "${destino_item}" >> "${LOG_FILE}" 2>&1 &
+    #     rm_pid=$!
+    #
+    #
+    #     spinner="\|\/\-\/" 
+    #     i=0
+    #     while kill -0 "$rm_pid" 2>/dev/null; do
+    #         i=$(( (i+1) % 4 ))
+    #         printf "\r  [%s] Eliminando '${nombre_dir}'... " "${spinner:$i:1}"
+    #         sleep 0.2
+    #     done
+    #     wait "$rm_pid"
+    #     rm_status=$?
+    #     echo -e "[OK] '${nombre_dir}' eliminada\n" >> "${LOG_FILE}" 2>&1 
+    #
+    #     if [ $rm_status -ne 0 ]; then
+    #         log_error "Fallo al eliminar '${destino_item}' (código $rm_status)"
+    #       else
+    #         log_info "Carpeta '${nombre_dir}' eliminada del NAS"
+    #       fi
+    #     else
+    #       log_info "[DRY-RUN] Se eliminaría '${nombre_dir}'"
+    #     fi
     # fi
-    if [[ -z "${CARPETAS_VALIDAS[$nombre_dir]:-}" ]]; then
-    log_warn "La carpeta '${nombre_dir}' ya no está en la lista (${DIRECTORIOS_FILE})."
+    #
+      if [[ -z "${CARPETAS_VALIDAS[$nombre_dir]:-}" ]]; then
+        log_warn "La carpeta '${nombre_dir}' ya no está en la lista (${INCLUDESFILE})."
 
-    if [ "$DRY_RUN" = "0" ]; then
-        # Contar elementos para saber cuánto trabajo hay
-        total_items=$(find "${destino_item}" -mindepth 1 2>/dev/null | wc -l)
-        log_info "Eliminando '${nombre_dir}' (${total_items} elementos)..."
-
-        # Spinner mientras corre rm -rf en background
-        rm -rf "${destino_item}" >> "${LOG_FILE}" 2>&1 &
-        rm_pid=$!
-
-        spinner="\|\/\-\\"
-        i=0
-        while kill -0 "$rm_pid" 2>/dev/null; do
-            i=$(( (i+1) % 4 ))
-            printf "\r  [%s] Eliminando '${nombre_dir}'... " "${spinner:$i:1}"
-            sleep 0.2
-        done
-        wait "$rm_pid"
-        rm_status=$?
-        echo -e "[OK] '${nombre_dir}' eliminada\n" >> "${LOG_FILE}" 2>&1 
-
-        if [ $rm_status -ne 0 ]; then
-            log_error "Fallo al eliminar '${destino_item}' (código $rm_status)"
-          else
-            log_info "Carpeta '${nombre_dir}' eliminada del NAS"
-          fi
-        else
-          log_info "[DRY-RUN] Se eliminaría '${nombre_dir}'"
-        fi
-    fi
+        # Remove folders
+        # if [ "$DRY_RUN" = "0" ]; then
+        #     # --- Contar elementos (solo informativo) ---
+        #     total_items=$(find "${destino_item}" -mindepth 1 2>/dev/null | wc -l)
+        #     log_info "Eliminando '${nombre_dir}' (${total_items} elementos)..."
+        #
+        #     # --- Lanzar rm en background ---
+        #     rm -rf -- "${destino_item}" >> "${LOG_FILE}" 2>&1 &
+        #     # du -chls  -- "${destino_item}" >> "${LOG_FILE}" 2>&1 &
+        #     rm_pid=$!
+        #
+        #     # --- Spinner (braille) ---
+        #     spinner=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+        #     i=0
+        #
+        #     # Limpieza si el usuario pulsa Ctrl+C
+        #   cleanup_rm() {
+        #     printf "\r\033[K"
+        #     kill "$rm_pid" 2>/dev/null
+        #     wait "$rm_pid" 2>/dev/null
+        #     log_warn "Eliminación de '${nombre_dir}' interrumpida por el usuario."
+        #     exit 130
+        #   }
+        #   trap cleanup_rm INT TERM
+        #
+        #   while kill -0 "$rm_pid" 2>/dev/null; do
+        #     printf "\r[%s] Eliminando '%s'..." "${spinner[$i]}" "$nombre_dir"
+        #     i=$(( (i + 1) % ${#spinner[@]} ))
+        #     sleep 0.1
+        #   done
+        #
+        #   wait "$rm_pid"
+        #   rm_status=$?
+        #   trap - INT TERM
+        #
+        #   # Borrar la línea del spinner antes de escribir el resultado
+        #   printf "\r\033[K"
+        #
+        #   if [ "$rm_status" -ne 0 ]; then
+        #     log_error "Fallo al eliminar '${destino_item}' (código $rm_status)"
+        #   else
+        #     # printf "[OK] '%s' eliminada\n" "$nombre_dir" >> "${LOG_FILE}" 2>&1
+        #     log_info "Carpeta '${nombre_dir}' eliminada del NAS"
+        #   fi
+        #
+        # else
+        #   log_info "[DRY-RUN] Se eliminaría '${nombre_dir}'"
+        # fi
+        # Remove folders 
+      fi
+    
+    # --
   done
 
   # Restaurar el estado anterior de dotglob
@@ -272,7 +320,7 @@ fi
 # Respaldo iterativo leyendo directorios_home.txt
 # ---------------------------------------------------------------------------
 RC_HOME=0
-
+echo "Backup in progress. No cierre esta ventana..."
 while IFS= read -r carpeta || [[ -n "${carpeta}" ]]; do
   # Omitir líneas vacías o comentarios que comiencen con '#'
   [[ -z "${carpeta}" || "${carpeta}" =~ ^[[:space:]]*# ]] && continue
@@ -325,7 +373,7 @@ while IFS= read -r carpeta || [[ -n "${carpeta}" ]]; do
     ;;
   esac
 
-done <"${DIRECTORIOS_FILE}"
+done <"${INCLUDESFILE}"
 
 # ---------------------------------------------------------------------------
 # Resumen final
