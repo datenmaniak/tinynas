@@ -1,12 +1,14 @@
 #!/usr/bin/bash 
 #
-# backup-iteractivo-dirfiles-tinynas.sh 
+# backup-iteractivo-dirsfiles-tinynas.sh 
 #
-# Respaldo iterativo por carpetas del home del USER hacia /mnt/tinynas (NFS)
-# leyendo los directorios desde un archivo externo y depurando eliminados (incluyendo ocultos).
+# Respaldo iterativo por carpetas y archivos del home del USER hacia /mnt/tinynas (NFS)
+# leyendo las rutas desde un archivo externo y depurando eliminados (incluyendo ocultos).
 #
-#   sudo DRY_RUN=1 ./backup-etc-iteractivo-tinynas.sh    # solo simula
-#   sudo DELETE_AFTER=1 ./backup-etc-iteractivo-tinynas.sh  # con --delete-after
+# Uso:
+#   ./backup-iteractivo-dirsfiles-tinynas.sh               # Ejecución normal
+#   DRY_RUN=1 ./backup-iteractivo-dirsfiles-tinynas.sh     # Modo simulación
+#   DELETE_AFTER=1 ./backup-iteractivo-dirsfiles-tinynas.sh # Elimina en el destino archivos borrados en origen
 
 set -uo pipefail
 
@@ -14,67 +16,23 @@ set -uo pipefail
 # Configuración
 # ---------------------------------------------------------------------------
 
-NFSPATH="ryzen"     # nombre de la ruta en el NFS server asignada al PC/Usuario.
-#                   # la ruta de montaje esta determinada por el NFS.
-#
-#                   Cabe destacar que las estaciones comparten acceso al 
-#                   repositorio de respaldos de otra estaciones 
-#                   solo para lectura e intercambio.
-
+NFSPATH="ryzen"     # Nombre de la ruta en el servidor NFS asignada a la estación/usuario.
 
 HOME_USER="/home/${USER}"
-#SCRIPT_DIR="/home/${USER}/admin/tinynas"
-SCRIPT_DIR="$SCRIPTS/tinynas"
+SCRIPT_DIR="${SCRIPTS}/tinynas"
 MAIN_EXCLUDE="${SCRIPT_DIR}/main-exclude.txt"
 INCLUDESFILE="${SCRIPT_DIR}/home-dirs.txt"
 LOCK_FILE="${SCRIPT_DIR}/backup-tinynas-dinamico.lock"
 
-# se agrega lista de exclusiones adicionales  para afinar el filtrado. 
+# Listas de exclusiones adicionales para afinar el filtrado
 EXCLUDE_DOTCONFIG="${SCRIPT_DIR}/dot_config_exclude.txt"
 EXCLUDE_DOTLOCAL="${SCRIPT_DIR}/dot_local_exclude.txt"
-
-
-#  ---  como generar la lista de directorios --- 
-#
-#  generate-subdirs-list-from-directory $HOME home-dirs.txt
-#  generate-subdirs-list-from-directory ~/.config config-dirs.txt
-#  generate-subdirs-list-from-directory ~/.local local-dirs.txt
-#  generate-subdirs-list-from-directory ~/.local/share local-share.txt
-#  generate-subdirs-list-from-directory ~/.local/bin local-bin.txt
-#  generate-dotfiles-list
-
-# --- editar cada una de la listas
-#     1. Revisar los directorios 
-#     2. Eliminar de la lista aquellos que deben ser excluidos del respaldo.
-#
-# --- Concatenar las listas en `home-dirs.txt`
-#
-#{
-#   echo "# ---  ${HOME}  ---"
-#   cat home-dirs.txt
-#   echo "# --- dotfiles ---"
-#   cat dotfiles.txt
-#   echo "# --- ~/.config ---"
-#   cat config-dirs.txt
-#   echo "# ---  ~/.local  ---"
-#   cat local-dirs.txt
-#   echo "# ---  ~/.local/share ---"
-#   cat local-share.txt
-# } > lista.txt
-#
-# cp lista home-dirs.txt 
-#
-#
-
 
 NFS_ROOT="/var/mnt/tinynas/${NFSPATH}"
 CENTINELA="${NFS_ROOT}/.tinynas-id"
 DESTINO_BASE="${NFS_ROOT}/automated-backup"
-DESTINO_HOME="${DESTINO_BASE}/home/${USER}"  # se ajusta a $NFSPATH en lugar de $USER
+DESTINO_HOME="${DESTINO_BASE}/home/${USER}"
 
-# DESTINO_ETC="${DESTINO_BASE}/etc"
-
-#LOG_FILE="/home/${USER}/backup.log"
 LOG_FILE="/tmp/tinynas.log"
 
 # Umbral mínimo de espacio libre en el destino (en MiB)
@@ -84,7 +42,7 @@ ESPACIO_MIN_MB=512
 DRY_RUN="${DRY_RUN:-0}"           # 1 = simular, 0 = copiar de verdad
 DELETE_AFTER="${DELETE_AFTER:-0}" # 1 = añadir --delete-after a rsync
 
-# Opciones rsync optimizadas para NFS
+# Opciones rsync optimizadas para NFS (Se omitió --ignore-times para permitir incrementales eficientes)
 RSYNC_OPTS=(
   -aHAX
   --numeric-ids
@@ -92,24 +50,15 @@ RSYNC_OPTS=(
   --info=progress2
   --filter='-x security.selinux'
   --filter='-x system.nfs4_acl'
-  --ignore-times
   -z
-  --exclude-from="${EXCLUDE_DOTCONFIG}"
-  --exclude-from="${EXCLUDE_DOTLOCAL}"
 )
 
-#  --  changes log 
-#  parametros que han sido ignorados/eliminados durante la optimizacion del código
-#  
-  # --inplace
-  # --exclude-from="${EXCLUDE_DOTCONFIG}"
-  # --exclude-from="${EXCLUDE_DOTLOCAL}"
-  # --partial
-
+# Añadir exclusiones adicionales de forma dinámica si los archivos existen
+[[ -r "${EXCLUDE_DOTCONFIG}" ]] && RSYNC_OPTS+=( --exclude-from="${EXCLUDE_DOTCONFIG}" )
+[[ -r "${EXCLUDE_DOTLOCAL}" ]] && RSYNC_OPTS+=( --exclude-from="${EXCLUDE_DOTLOCAL}" )
 
 [[ "${DRY_RUN}" == "1" ]] && RSYNC_OPTS+=( -n )
 [[ "${DELETE_AFTER}" == "1" ]] && RSYNC_OPTS+=( --delete-after )
-
 
 # ---------------------------------------------------------------------------
 # Utilidades de log
@@ -127,7 +76,7 @@ log_warn() { log "WARN" "$@"; }
 log_error() { log "ERROR" "$@"; }
 
 # ---------------------------------------------------------------------------
-# Lock para evitar solapamiento
+# Lock para evitar ejecuciones simultáneas
 # ---------------------------------------------------------------------------
 exec 9>"${LOCK_FILE}"
 if ! flock -n 9; then
@@ -156,21 +105,21 @@ if [[ ! -r "${INCLUDESFILE}" ]]; then
   exit 1
 fi
 
-# Forzar montaje autofs con timeout
+# Forzar montaje autofs / verificación de conectividad con timeout
 if ! timeout 20 ls "${NFS_ROOT}" >/dev/null 2>&1; then
   log_error "No se pudo acceder a ${NFS_ROOT} (autofs no montó o NFS caído). Abortando."
   exit 1
 fi
 log_info "autofs/NFS accesible en ${NFS_ROOT}."
 
-# Centinela: solo advertencia
+# Verificación de Centinela
 if [[ ! -e "${CENTINELA}" ]]; then
   log_warn "Centinela ${CENTINELA} no encontrado. Se continúa."
 else
-  log_info "Centinela encontrado: $(cat "${CENTINELA}" 2>/dev/null | head -n1)"
+  log_info "Centinela encontrado: $(head -n1 "${CENTINELA}" 2>/dev/null)"
 fi
 
-# Espacio libre en destino
+# Verificación de espacio libre en el destino
 ESPACIO_LIBRE_MB=$(df -Pm "${NFS_ROOT}" | awk 'NR==2 {print $4}')
 if [[ -z "${ESPACIO_LIBRE_MB}" || "${ESPACIO_LIBRE_MB}" -lt "${ESPACIO_MIN_MB}" ]]; then
   log_error "Espacio libre insuficiente en ${NFS_ROOT} (${ESPACIO_LIBRE_MB:-?} MiB < ${ESPACIO_MIN_MB} MiB). Abortando."
@@ -178,167 +127,89 @@ if [[ -z "${ESPACIO_LIBRE_MB}" || "${ESPACIO_LIBRE_MB}" -lt "${ESPACIO_MIN_MB}" 
 fi
 log_info "Espacio libre en destino: ${ESPACIO_LIBRE_MB} MiB."
 
-
-if [ ! -d "${DESTINO_HOME}" ]; then
-  log_info "[User repo not found/Created ] ${DESTINO_HOME}" 
-  mkdir -p "${DESTINO_HOME}" > "${LOG_FILE}" 2>&1  || {
-  log_error "No se pudo crear la estructura en ${DESTINO_BASE}. Abortando."
-  exit 1
-}
+# Crear directorio base de destino en el NAS si no existe
+if [[ ! -d "${DESTINO_HOME}" ]]; then
+  log_info "[User repo not found/Created] ${DESTINO_HOME}" 
+  mkdir -p "${DESTINO_HOME}" >> "${LOG_FILE}" 2>&1 || {
+    log_error "No se pudo crear la estructura en ${DESTINO_HOME}. Abortando."
+    exit 1
+  }
 else
   log_info "[Repo already exists] ${DESTINO_HOME}" 
 fi
 
-
 # ---------------------------------------------------------------------------
-# Depuración previa (Optimizada y corregida)
+# Depuración previa: Eliminar del NAS elementos que ya no están en la lista
 # ---------------------------------------------------------------------------
 if [[ -d "${DESTINO_HOME}" ]]; then
 
-  # 1. Recopilar carpetas válidas del archivo de configuración en un arreglo asociativo
   declare -A CARPETAS_VALIDAS
   while IFS= read -r linea || [[ -n "${linea}" ]]; do
-    # Omitir líneas vacías o comentarios
     [[ -z "${linea}" || "${linea}" =~ ^[[:space:]]*# ]] && continue
-
-    limpia=$(echo "${linea}" | xargs)
+    limpia="$(echo "${linea}" | xargs)"
     [[ -n "${limpia}" ]] && CARPETAS_VALIDAS["${limpia}"]=1
   done < "${INCLUDESFILE}"
 
-  # 2. Recorrer el directorio de destino de forma segura usando nullglob / dotglob
-  # (dotglob permite incluir archivos/carpetas ocultos que comiencen con punto)
-  #typeset -z old_dotglob
+  # Activar dotglob para incluir carpetas ocultas que inicien con punto
   old_dotglob=$(shopt -p dotglob)
   shopt -s dotglob
 
   for destino_item in "${DESTINO_HOME}"/*; do
     [[ -d "${destino_item}" ]] || continue
-
-
     nombre_dir=$(basename "${destino_item}")
 
-    # Omitir directorios especiales de ruta
     [[ "${nombre_dir}" == "." || "${nombre_dir}" == ".." ]] && continue
 
-    # if [[ -z "${CARPETAS_VALIDAS[$nombre_dir]:-}" ]]; then
-    # log_warn "La carpeta '${nombre_dir}' ya no está en la lista (${INCLUDESFILE})."
-    #
-    # if [ "$DRY_RUN" = "0" ]; then
-    #     # Contar elementos para saber cuánto trabajo hay
-    #     total_items=$(find "${destino_item}" -mindepth 1 2>/dev/null | wc -l)
-    #     log_info "Eliminando '${nombre_dir}' (${total_items} elementos)..."
-    #
-    #     # Spinner mientras corre rm -rf en background
-    #     rm -rf "${destino_item}" >> "${LOG_FILE}" 2>&1 &
-    #     rm_pid=$!
-    #
-    #
-    #     spinner="\|\/\-\/" 
-    #     i=0
-    #     while kill -0 "$rm_pid" 2>/dev/null; do
-    #         i=$(( (i+1) % 4 ))
-    #         printf "\r  [%s] Eliminando '${nombre_dir}'... " "${spinner:$i:1}"
-    #         sleep 0.2
-    #     done
-    #     wait "$rm_pid"
-    #     rm_status=$?
-    #     echo -e "[OK] '${nombre_dir}' eliminada\n" >> "${LOG_FILE}" 2>&1 
-    #
-    #     if [ $rm_status -ne 0 ]; then
-    #         log_error "Fallo al eliminar '${destino_item}' (código $rm_status)"
-    #       else
-    #         log_info "Carpeta '${nombre_dir}' eliminada del NAS"
-    #       fi
-    #     else
-    #       log_info "[DRY-RUN] Se eliminaría '${nombre_dir}'"
-    #     fi
-    # fi
-    #
-      if [[ -z "${CARPETAS_VALIDAS[$nombre_dir]:-}" ]]; then
-        log_warn "La carpeta '${nombre_dir}' ya no está en la lista (${INCLUDESFILE})."
+    if [[ -z "${CARPETAS_VALIDAS[$nombre_dir]:-}" ]]; then
+      log_warn "La carpeta '${nombre_dir}' ya no está en la lista (${INCLUDESFILE})."
 
-        # Remove folders
-        # if [ "$DRY_RUN" = "0" ]; then
-        #     # --- Contar elementos (solo informativo) ---
-        #     total_items=$(find "${destino_item}" -mindepth 1 2>/dev/null | wc -l)
-        #     log_info "Eliminando '${nombre_dir}' (${total_items} elementos)..."
-        #
-        #     # --- Lanzar rm en background ---
-        #     rm -rf -- "${destino_item}" >> "${LOG_FILE}" 2>&1 &
-        #     # du -chls  -- "${destino_item}" >> "${LOG_FILE}" 2>&1 &
-        #     rm_pid=$!
-        #
-        #     # --- Spinner (braille) ---
-        #     spinner=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
-        #     i=0
-        #
-        #     # Limpieza si el usuario pulsa Ctrl+C
-        #   cleanup_rm() {
-        #     printf "\r\033[K"
-        #     kill "$rm_pid" 2>/dev/null
-        #     wait "$rm_pid" 2>/dev/null
-        #     log_warn "Eliminación de '${nombre_dir}' interrumpida por el usuario."
-        #     exit 130
-        #   }
-        #   trap cleanup_rm INT TERM
-        #
-        #   while kill -0 "$rm_pid" 2>/dev/null; do
-        #     printf "\r[%s] Eliminando '%s'..." "${spinner[$i]}" "$nombre_dir"
-        #     i=$(( (i + 1) % ${#spinner[@]} ))
-        #     sleep 0.1
-        #   done
-        #
-        #   wait "$rm_pid"
-        #   rm_status=$?
-        #   trap - INT TERM
-        #
-        #   # Borrar la línea del spinner antes de escribir el resultado
-        #   printf "\r\033[K"
-        #
-        #   if [ "$rm_status" -ne 0 ]; then
-        #     log_error "Fallo al eliminar '${destino_item}' (código $rm_status)"
-        #   else
-        #     # printf "[OK] '%s' eliminada\n" "$nombre_dir" >> "${LOG_FILE}" 2>&1
-        #     log_info "Carpeta '${nombre_dir}' eliminada del NAS"
-        #   fi
-        #
-        # else
-        #   log_info "[DRY-RUN] Se eliminaría '${nombre_dir}'"
-        # fi
-        # Remove folders 
+      if [[ "${DRY_RUN}" == "0" ]]; then
+        total_items=$(find "${destino_item}" -mindepth 1 2>/dev/null | wc -l)
+        log_info "Eliminando '${nombre_dir}' del NAS (${total_items} elementos)..."
+
+        rm -rf -- "${destino_item}" >> "${LOG_FILE}" 2>&1
+        rm_status=$?
+
+        if [[ ${rm_status} -ne 0 ]]; then
+          log_error "Fallo al eliminar '${destino_item}' (código ${rm_status})"
+        else
+          log_info "Carpeta '${nombre_dir}' eliminada del NAS con éxito."
+        fi
+      else
+        log_info "[DRY-RUN] Se eliminaría '${nombre_dir}' del NAS"
       fi
-    
-    # --
+    fi
   done
 
-  # Restaurar el estado anterior de dotglob
   eval "$old_dotglob"
 fi
 
-
 # ---------------------------------------------------------------------------
-# Respaldo iterativo leyendo directorios_home.txt
+# Respaldo iterativo leyendo el archivo de inclusiones
 # ---------------------------------------------------------------------------
 RC_HOME=0
 echo "Backup in progress. No cierre esta ventana..."
+
 while IFS= read -r carpeta || [[ -n "${carpeta}" ]]; do
-  # Omitir líneas vacías o comentarios que comiencen con '#'
+  # Omitir líneas vacías o comentarios
   [[ -z "${carpeta}" || "${carpeta}" =~ ^[[:space:]]*# ]] && continue
 
-  # Eliminar espacios o retornos de carro sobrantes
-  carpeta=$(echo "${carpeta}" | xargs)
+  carpeta="$(echo "${carpeta}" | xargs)"
+  [[ -z "${carpeta}" ]] && continue
 
-  
-  # incluye soporte para archivos sueltos | 16.10.26, 13:59
-  #ORIGEN_FULL="${carpeta}"
   ORIGEN_FULL="${HOME_USER}/${carpeta}"
   DESTINO_FULL="${DESTINO_HOME}/${carpeta}"
 
   if [[ -d "${ORIGEN_FULL}" ]]; then
 
-    log_warn "[No encontrado en el destino] ${ORIGEN_FULL}" >> "${LOG_FILE}" 2>&1 
-    # --- Caso 1: es un directorio -> copia contenido recursivo ---
-    log_info "Iniciando copia del directorio: ${carpeta}"
+    # Comprobación real de existencia previa en el destino para un logging claro
+    if [[ ! -d "${DESTINO_FULL}" ]]; then
+      log_warn "[No encontrado en el destino - Se creará] ${DESTINO_FULL}"
+    else
+      log_info "[Existe en el destino] Sincronizando directorio: ${carpeta}"
+    fi
+
+    # --- Caso 1: Es un directorio -> copia contenido recursivo ---
     mkdir -p "${DESTINO_FULL}/" >> "${LOG_FILE}" 2>&1 
 
     rsync "${RSYNC_OPTS[@]}" \
@@ -348,10 +219,11 @@ while IFS= read -r carpeta || [[ -n "${carpeta}" ]]; do
     RC_SUB=$?
 
   elif [[ -f "${ORIGEN_FULL}" ]]; then
-    # --- Caso 2: es un archivo suelto -> copia el archivo en su ruta padre ---
+
+    # --- Caso 2: Es un archivo suelto -> copia el archivo en su ruta padre ---
     log_info "Iniciando rsync del archivo: ${carpeta}"
     PADRE_DESTINO="$(dirname "${DESTINO_FULL}")"
-     mkdir -p "${PADRE_DESTINO}" >> "${LOG_FILE}" 2>&1 
+    mkdir -p "${PADRE_DESTINO}" >> "${LOG_FILE}" 2>&1 
 
     rsync "${RSYNC_OPTS[@]}" \
       "${ORIGEN_FULL}" \
@@ -360,28 +232,30 @@ while IFS= read -r carpeta || [[ -n "${carpeta}" ]]; do
     RC_SUB=$?
 
   else
-    log_warn "La ruta origen ${ORIGEN_FULL} no existe. Omitiendo."
+    log_warn "La ruta origen ${ORIGEN_FULL} no existe en el sistema. Omitiendo."
     continue
   fi
 
+  # Evaluación del resultado de rsync por elemento
   case "${RC_SUB}" in
-  0)  log_info "Entrada [${carpeta}]: rsync OK (código 0)." ;;
-  24) log_warn "Entrada [${carpeta}]: rsync completó con código 24 (archivos desaparecieron)." ;;
-  *)
-    log_error "Entrada [${carpeta}]: rsync falló con código ${RC_SUB}."
-    RC_HOME=1
-    ;;
+    0)  log_info "Entrada [${carpeta}]: rsync OK (código 0)." ;;
+    24) log_warn "Entrada [${carpeta}]: rsync completó con código 24 (archivos desaparecieron durante la copia)." ;;
+    *)
+      log_error "Entrada [${carpeta}]: rsync falló con código ${RC_SUB}."
+      RC_HOME=1
+      ;;
   esac
 
 done <"${INCLUDESFILE}"
 
 # ---------------------------------------------------------------------------
-# Resumen final
+# Resumen final y cierre
+# ---------------------------------------------------------------------------
 TAM_HOME=$(du -sh "${DESTINO_HOME}" 2>/dev/null | awk '{print $1}')
-log_info "Tamaño total destino home: ${TAM_HOME:-?}"
+log_info "Tamaño total destino home en NAS: ${TAM_HOME:-?}"
 
 RC_FINAL=0
 [[ "${RC_HOME}" -ne 0 ]] && RC_FINAL=1
 
-log_info "----------- Fin de respaldo  (código agregado: ${RC_FINAL}) ----  $(date)  ----"
+log_info "----------- Fin de respaldo (código final: ${RC_FINAL}) ---- $(date) ----"
 exit "${RC_FINAL}"
